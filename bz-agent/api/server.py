@@ -9,11 +9,13 @@ want to compare it against the serverless path. Run:
 """
 from __future__ import annotations
 
+import json
+
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
-from agents.graph import run_plan
+from agents.graph import run_plan, run_plan_stream
 from api.webui import INDEX_HTML
 
 app = FastAPI(title="BZ-Agent", version="0.1.0")
@@ -48,3 +50,16 @@ def plan(req: PlanRequest) -> dict[str, str]:
         lon=req.lon,
     )
     return {"itinerary": answer}
+
+
+@app.post("/plan-itinerary/stream")
+def plan_stream(req: PlanRequest) -> StreamingResponse:
+    """Server-Sent Events: emits progress as each agent finishes, then the result."""
+    def event_source():
+        for event in run_plan_stream(
+            user_id=req.user_id, session_id=req.session_id,
+            user_request=req.request, lat=req.lat, lon=req.lon,
+        ):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(event_source(), media_type="text/event-stream")

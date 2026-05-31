@@ -29,7 +29,10 @@ INDEX_HTML = """<!doctype html>
   .chips { margin:12px 0 0; display:flex; gap:8px; flex-wrap:wrap; }
   .chip { font-size:.8rem; color:#cbd5e1; background:#1e293b; border:1px solid #334155;
           padding:6px 10px; border-radius:999px; cursor:pointer; }
-  #out { margin-top:24px; background:#1e293b; border:1px solid #334155; border-radius:12px;
+  #steps { margin-top:18px; display:flex; flex-direction:column; gap:6px; }
+  .step { color:#94a3b8; font-size:.9rem; opacity:.5; transition:opacity .2s; }
+  .step.done { color:#10b981; opacity:1; }
+  #out { margin-top:16px; background:#1e293b; border:1px solid #334155; border-radius:12px;
          padding:20px; min-height:60px; line-height:1.55; }
   #out h1,#out h2 { font-size:1.1rem; }
   .status { color:#94a3b8; font-style:italic; }
@@ -52,24 +55,41 @@ INDEX_HTML = """<!doctype html>
     <span class="chip">Where can I park downtown?</span>
   </div>
 
+  <div id="steps"></div>
   <div id="out"><span class="status">Your itinerary will appear here.</span></div>
-  <footer>Retriever → Reasoner → Generator · state in DynamoDB</footer>
+  <footer>Retriever → Reasoner → Generator · streamed live · state in DynamoDB</footer>
 </div>
 
 <script>
 const f=document.getElementById('f'), q=document.getElementById('q'),
-      b=document.getElementById('b'), out=document.getElementById('out');
+      b=document.getElementById('b'), out=document.getElementById('out'),
+      steps=document.getElementById('steps');
 document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{q.value=c.textContent.trim();q.focus();});
+
+function addStep(msg){ const d=document.createElement('div'); d.className='step done';
+  d.textContent='✓ '+msg; steps.appendChild(d); }
+
 f.onsubmit=async(e)=>{
   e.preventDefault();
   const text=q.value.trim(); if(!text) return;
-  b.disabled=true; out.innerHTML='<span class="status">Fetching data, reasoning, writing your plan… (10–30s)</span>';
+  b.disabled=true; steps.innerHTML=''; out.innerHTML='<span class="status">Working…</span>';
   try{
-    const r=await fetch('/plan-itinerary',{method:'POST',headers:{'Content-Type':'application/json'},
+    const r=await fetch('/plan-itinerary/stream',{method:'POST',
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({user_id:'web',session_id:'web-'+Date.now(),request:text})});
-    const j=await r.json();
-    out.innerHTML = j.itinerary ? marked.parse(j.itinerary)
-                                : '<span class="status">Error: '+(j.error||JSON.stringify(j))+'</span>';
+    const reader=r.body.getReader(); const dec=new TextDecoder(); let buf='';
+    while(true){
+      const {value,done}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      let idx;
+      while((idx=buf.indexOf('\\n\\n'))>=0){
+        const line=buf.slice(0,idx).trim(); buf=buf.slice(idx+2);
+        if(!line.startsWith('data:')) continue;
+        const ev=JSON.parse(line.slice(5).trim());
+        if(ev.type==='progress'){ addStep(ev.message); }
+        else if(ev.type==='done'){ out.innerHTML=marked.parse(ev.itinerary||'(no itinerary)'); }
+      }
+    }
   }catch(err){ out.innerHTML='<span class="status">Request failed: '+err+'</span>'; }
   b.disabled=false;
 };

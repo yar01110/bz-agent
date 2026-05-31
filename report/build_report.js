@@ -183,11 +183,13 @@ const doc = new Document({
       P("The weather feature was confirmed to influence reasoning: on a clear 32 °C day the Reasoner produced an outdoor plan (city squares, the Etsch river bike path, a rooftop terrace) and explicitly cited the good weather."),
       table([3120, 6240], [
         ["Endpoint", "Status"],
-        ["EC2 (Architecture B)", "Live, browser UI + POST API, HTTP 200, ~13 s warm"],
+        ["EC2 (Architecture B, in custom VPC)", "Live, browser UI + POST API, HTTP 200, ~13 s warm"],
         ["Lambda via API Gateway (Architecture A)", "Live public POST endpoint, HTTP 200"],
+        ["SSE progress streaming", "Live: emits 3 progress events, then the itinerary"],
         ["DynamoDB state", "Scratchpad written per node (retriever/reasoner/generator)"],
         ["Bedrock Claude Sonnet 4.5", "Reasoning + generation verified live"],
       ]),
+      P("A Server-Sent Events endpoint (POST /plan-itinerary/stream) streams progress to the browser, so the UI shows a live checklist — “Fetched live data”, “Reasoned over constraints”, “Wrote your itinerary” — as each agent finishes. The whole stack is also codified as Terraform (infra/) for reproducible, one-command provisioning."),
 
       // ---- 10. Course objectives ----
       H1("10. Mapping to Course Objectives"),
@@ -205,11 +207,9 @@ const doc = new Document({
 
       // ---- 11. Future work ----
       H1("11. Future Work"),
-      bullet("Extend the VPC with private subnets and place the Lambda inside it with interface endpoints."),
-      bullet("Live SASA bus / GTFS schedules so the Reasoner can suggest exact departures."),
-      bullet("WebSocket streaming of progress (“Fetching weather… Calculating routes…”) to the UI."),
-      bullet("Infrastructure as Code (AWS CDK or Terraform) wrapping the deploy scripts."),
-      bullet("Multi-turn memory so follow-up questions reuse prior session context."),
+      bullet("Live SASA bus / GTFS schedules so the Reasoner can suggest exact departures. (Not in the ODH public flat API; would require integrating SASA’s separate GTFS feed.)"),
+      bullet("Place the Lambda inside private subnets. Designed but deferred on cost grounds: reaching the public Open Data Hub from a private subnet needs a NAT Gateway (~$38/month) plus a Bedrock interface endpoint (~$8/month); not justified for a demo. Documented as a deliberate cost-aware decision."),
+      bullet("Multi-turn memory so follow-up questions reuse prior session context (history is already persisted in DynamoDB)."),
 
       // ---- Appendix ----
       H1("Appendix A. Project Structure & Endpoints"),

@@ -138,6 +138,57 @@ const doc = new Document({
       ]),
       P("Conclusion: for an interactive planner with bursty, unpredictable usage, Lambda + API Gateway is the cost-efficient default (zero idle cost). EC2 becomes preferable only if traffic is steady enough to keep the instance busy, or if an agent run could exceed Lambda’s 15-minute ceiling.", { bold: true }),
 
+      H2("5.1 Load-testing methodology"),
+      P("The two architectures were compared under increasing concurrency of approximately 50, 200, and 1000 simulated users. Because every /plan-itinerary call triggers ~3 Amazon Bedrock requests, a sustained 1000-user run would generate tens of thousands of Bedrock calls — incurring real cost and hitting Bedrock’s per-minute quota — so a hybrid approach was used:"),
+      bullet("k6 scripts (load50 / load200 / stress1000 scenarios) provide the aggressive, repeatable load generator."),
+      bullet("Real measurements were taken for single-request latency and for raw infrastructure concurrency on the cost-free /health endpoint."),
+      bullet("The full 50/200/1000-user workload is then modelled from those real numbers plus documented AWS service limits, with estimates clearly labelled."),
+
+      H2("5.2 Measured results"),
+      P("Single-request latency (EC2 t3.small, warm): six sequential requests averaged 16.9 s (min 14.7 s, max 18.4 s); Lambda was comparable (~13–15 s warm, ~17.8 s cold). Latency is dominated by the three sequential Bedrock calls, so it is similar for both architectures. Raw infrastructure concurrency on /health:"),
+      table([1560, 1560, 1560, 1560, 1560, 1560], [
+        ["Concurrency", "Throughput", "p50", "p95", "p99", "Errors"],
+        ["50", "252 req/s", "76 ms", "733 ms", "1153 ms", "0.07%"],
+        ["200", "90 req/s", "1673 ms", "5879 ms", "6547 ms", "0.55%"],
+      ]),
+      P("Key finding: from 50 to 200 concurrent connections the single instance’s throughput fell (252 → 90 req/s) while latency rose roughly 20×. The t3.small is already saturating at 200 concurrent connections even on a trivial endpoint — direct evidence of EC2’s single-instance scaling limit.", { bold: true }),
+
+      H2("5.3 Modelled behaviour at 50 / 200 / 1000 users"),
+      P("Assuming ~17 s per request and a new request roughly every 20 s per user, demand ≈ users / 20 req/s. One t3.small serves the async workload at ~40 in-flight requests, a ceiling of ≈ 2.4 req/s."),
+      table([1300, 1500, 3280, 3280], [
+        ["Users", "Demand", "EC2 t3.small (1 instance)", "Lambda (auto-scale)"],
+        ["50", "~2.5 req/s", "At capacity; minor queueing; p95 rises", "~50 concurrent; fine; some cold starts on ramp"],
+        ["200", "~10 req/s", "4× over capacity → queue blow-up, timeouts, errors", "~200 concurrent; fine if account limit ≥200; Bedrock RPM may begin to throttle"],
+        ["1000", "~50 req/s", "~20× over → fails; needs ~21 instances + load balancer", "~1000 concurrent (at default limit); Bedrock per-minute quota becomes the shared bottleneck"],
+      ]),
+
+      H2("5.4 Reliability"),
+      table([3120, 3120, 3120], [
+        ["Aspect", "EC2 (single instance)", "Lambda"],
+        ["Redundancy", "None — single point of failure", "Multi-AZ by default"],
+        ["Instance/AZ failure", "Full outage until restart", "Handled transparently by AWS"],
+        ["Burst absorption", "Poor (fixed capacity)", "Automatic per-request scaling"],
+        ["To match the other", "Add Auto Scaling Group + ALB", "Built-in"],
+      ]),
+
+      H2("5.5 Scalability"),
+      bullet("EC2: vertical (bigger instance) or manual horizontal via an Auto Scaling Group; capacity must be provisioned ahead of demand and reacts slowly."),
+      bullet("Lambda: automatic, near-instant, per-request horizontal scaling up to the account concurrency limit (default ~1000; a new account may need a quota increase)."),
+      bullet("Shared ceiling: at ~1000 users the binding constraint is Amazon Bedrock’s per-minute request/token quota — identical for both architectures. Beyond that point, only a Bedrock quota increase helps."),
+
+      H2("5.6 Resource usage"),
+      bullet("EC2 t3.small (2 vCPU, 2 GB): the workload is I/O-bound (waiting on Bedrock), so CPU stays low; the real limit is connection/threadpool concurrency (saturated at ~200 connections above). Burstable CPU credits can also throttle sustained load."),
+      bullet("Lambda: 2048 MB per concurrent execution (~1.2 vCPU each), fully isolated; at 1000 concurrency that is ~2 TB of aggregate transient memory, managed by AWS."),
+
+      H2("5.7 Billing under load (estimated, per 1,000 itineraries)"),
+      table([3120, 3120, 3120], [
+        ["Component", "EC2 path", "Lambda path"],
+        ["Amazon Bedrock (Claude)", "~$40 (dominant, identical)", "~$40 (dominant, identical)"],
+        ["Compute", "$15.6/mo fixed per instance; needs a fleet+ALB for ≥200 users", "~$0.56 per 1,000 + $0 when idle"],
+        ["Gateway / state", "n/a / pennies", "~$1 per million / pennies"],
+      ]),
+      P("Billing conclusion: the LLM (Bedrock) is ~95%+ of the cost and is identical for both architectures — the compute choice is a rounding error on the total bill. Lambda wins on variable, spiky, or low-to-medium load (zero idle cost, no capacity planning); EC2 only competes when a single instance is kept near 100% utilised around the clock, and it requires an Auto Scaling Group plus a load balancer to survive 200+ concurrent users.", { bold: true }),
+
       // ---- 6. Pricing ----
       H1("6. Cloud Pricing Analysis"),
       P("AWS follows a pay-per-use philosophy: you pay for what you consume, with no upfront cost. BZ-Agent illustrates three different billing models in one system."),

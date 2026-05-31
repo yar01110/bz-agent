@@ -16,14 +16,18 @@ from shared.jsonutil import extract_json
 from shared.llm import get_llm
 
 _REASONER_PROMPT = """You are an itinerary constraint solver for Bolzano.
-You receive sanitized data (POIs, events, live bike availability) as JSON.
-Build a realistic ordered plan that respects:
+You receive sanitized data (POIs, events, parking, bike stations, and today's
+weather) as JSON. Build a realistic ordered plan that respects:
   - geographic proximity (don't zig-zag across the city),
   - a transit buffer of >=15 min between stops,
-  - bike availability if the user relies on bikes (skip empty stations).
+  - parking/bike availability (skip car parks with 0 free spaces),
+  - WEATHER: if rain_chance_pct is high (>=50) or thunderstorm is true, prefer
+    INDOOR stops (museums, galleries, covered markets) and note it; if it's warm
+    and clear, outdoor POIs and walking routes are fine.
 Output ONLY JSON: a list of steps, each:
   {"order": int, "name": str, "lat": float|null, "lon": float|null,
    "why": str, "transport": str}
+Let the "why" briefly reflect the weather reasoning when relevant.
 No prose outside the JSON."""
 
 

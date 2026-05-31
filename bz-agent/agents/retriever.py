@@ -11,7 +11,7 @@ import json
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agents.state import AgentState
-from odh import content_api, mobility_api
+from odh import content_api, mobility_api, weather_api
 from shared.dynamo import save_scratchpad
 from shared.jsonutil import extract_json
 from shared.llm import get_llm
@@ -47,6 +47,9 @@ def retriever_node(state: AgentState) -> AgentState:
             return fn()
         except Exception as e:  # noqa: BLE001 - degrade gracefully, log to scratchpad
             return {"error": f"{type(e).__name__}: {e}", "_label": label}
+
+    # weather is always relevant — it drives the Reasoner's indoor/outdoor choices
+    retrieved["weather"] = _safe("weather", weather_api.bolzano_weather)
 
     if plan.get("pois"):
         retrieved["pois"] = _safe(

@@ -1,0 +1,15 @@
+# --- Core agent framework ---
+langgraph>=0.2.0
+langchain-core>=0.3.0
+
+# --- LLM providers (one switch in config.py decides which is used) ---
+langchain-aws>=0.2.0          # Amazon Bedrock  (recommended for you)
+langchain-anthropic>=0.2.0    # Anthropic API   (only if you create a console.anthropic.com key)
+
+# --- AWS + HTTP ---
+boto3>=1.34.0                 # DynamoDB, Secrets Manager, Bedrock
+httpx>=0.27.0                 # calling the Open Data Hub APIs
+
+# --- Config / validation ---
+pydantic>=2.7.0
+python-dotenv>=1.0.0

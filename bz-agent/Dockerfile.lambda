@@ -1,0 +1,16 @@
+# Lambda container image (Architecture A — serverless).
+# Uses AWS's Lambda Python base image, which bundles the Runtime Interface Client.
+FROM public.ecr.aws/lambda/python:3.12
+
+# deps
+COPY requirements.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r requirements.txt
+
+# app code (no .env — Lambda config comes from function environment variables)
+COPY shared ${LAMBDA_TASK_ROOT}/shared
+COPY odh    ${LAMBDA_TASK_ROOT}/odh
+COPY agents ${LAMBDA_TASK_ROOT}/agents
+COPY api    ${LAMBDA_TASK_ROOT}/api
+
+# handler = module.function
+CMD ["api.lambda_handler.handler"]

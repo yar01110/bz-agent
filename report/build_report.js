@@ -159,9 +159,15 @@ const doc = new Document({
       bullet("Secrets kept out of source control: a .gitignore excludes the .env file; only .env.example (no secrets) is committed."),
       bullet("Encryption at rest: DynamoDB encrypts table data by default; ECR image scanning is enabled on push."),
       bullet("Key rotation awareness: an access key accidentally exposed during setup was identified as a rotation risk (documented as a lesson in secure credential handling)."),
-      H2("7.1 Hardening still recommended"),
-      bullet("Move EC2 and Lambda into a custom VPC with private subnets and VPC endpoints for DynamoDB/Bedrock."),
-      bullet("Enable MFA on the root account; serve EC2 over HTTPS; store any future secret in AWS Secrets Manager."),
+      H2("7.1 Network isolation — custom VPC"),
+      P("The EC2 workload runs inside a purpose-built Virtual Private Cloud rather than the default VPC, demonstrating network-level control:"),
+      bullet("VPC 10.0.0.0/16 with DNS support and hostnames enabled."),
+      bullet("A public subnet (10.0.1.0/24) with an Internet Gateway and a 0.0.0.0/0 route, so the instance can reach the Open Data Hub and Bedrock."),
+      bullet("A DynamoDB gateway VPC endpoint attached to the route table, so state traffic to DynamoDB stays on the AWS private network instead of the public internet (and incurs no extra cost)."),
+      bullet("A security group that allows only inbound TCP 8080, acting as a stateful virtual firewall."),
+      H2("7.2 Hardening still recommended"),
+      bullet("Move the Lambda into private subnets with interface endpoints; serve EC2 over HTTPS behind a load balancer."),
+      bullet("Enable MFA on the root account; store any future secret in AWS Secrets Manager."),
 
       // ---- 8. Deployment ----
       H1("8. Deployment Process"),
@@ -191,7 +197,7 @@ const doc = new Document({
         ["Explain cloud architectural principles", "Done", "Sections 2, 4"],
         ["Explain the cloud pricing philosophy", "Done", "Section 6"],
         ["Describe security & compliance measures", "Done", "Section 7"],
-        ["Create and manage a VPC", "Planned", "Section 7.1 (next phase)"],
+        ["Create and manage a VPC", "Done", "Section 7.1"],
         ["Principles of cloud-native applications", "Done", "Sections 2, 8"],
         ["When to use EC2 vs Lambda vs Beanstalk", "Done", "Section 5"],
         ["Compare distributed systems architectures", "Done", "Section 5"],
@@ -199,7 +205,7 @@ const doc = new Document({
 
       // ---- 11. Future work ----
       H1("11. Future Work"),
-      bullet("Custom VPC with private subnets and VPC endpoints (the remaining graded objective)."),
+      bullet("Extend the VPC with private subnets and place the Lambda inside it with interface endpoints."),
       bullet("Live SASA bus / GTFS schedules so the Reasoner can suggest exact departures."),
       bullet("WebSocket streaming of progress (“Fetching weather… Calculating routes…”) to the UI."),
       bullet("Infrastructure as Code (AWS CDK or Terraform) wrapping the deploy scripts."),

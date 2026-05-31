@@ -11,15 +11,23 @@ derived from the measured numbers + documented AWS limits).
 - **avg ≈ 16.9 s, min 14.7 s, max 18.4 s** (each request = ~3 Bedrock calls + ODH fetches)
 - Lambda via API Gateway: ~17.8 s cold, ~13–15 s warm (comparable; Bedrock dominates latency)
 
-### A2. Infra concurrency — cost-free `/health`, EC2 `t3.small`
-| Concurrency | Throughput | p50 | p95 | p99 | Errors |
-|---|---|---|---|---|---|
-| 50  | **252 req/s** | 76 ms  | 733 ms  | 1153 ms | 0.07% |
-| 200 | **90 req/s**  | 1673 ms | 5879 ms | 6547 ms | 0.55% |
+### A2. Infra concurrency sweep — cost-free `/health`, EC2 `t3.small`
+| Concurrency | Throughput | p50 | p95 |
+|---|---|---|---|
+| 25  | **322 req/s** (peak) | 56 ms   | 230 ms  |
+| 50  | 187 req/s            | 223 ms  | 730 ms  |
+| 100 | 115 req/s            | 627 ms  | 2.6 s   |
+| 150 | 97 req/s             | 1.1 s   | 5.0 s   |
+| 200 | 88 req/s             | 2.2 s   | 7.0 s   |
+| 300 | 78 req/s             | 5.2 s   | 14.7 s  |
+| 400 | 90 req/s             | 6.9 s   | 15.0 s  |
 
-**Key finding:** going 50 → 200 concurrent, throughput *fell* (252 → 90 req/s)
-and latency rose ~20×. The single small instance is already saturating at 200
-concurrent connections even on a trivial endpoint.
+**Spike / breaking point:** throughput **peaks at ~25 concurrency (322 req/s)**
+then collapses; latency **spikes between 150–200** (p95 crosses 5 s) and by 300+
+the instance is effectively broken (p95 ≈ 15 s on a trivial endpoint). Usable
+ceiling ≈ **50 concurrent**, breakdown ≈ **150–200**. (An earlier isolated run
+measured 252 req/s at concurrency 50 — run-to-run variance is normal for these
+network-bound tests.) See `report/loadchart.png` for the saturation curve.
 
 ## B. Modelled (estimated) — full `/plan-itinerary` workload
 

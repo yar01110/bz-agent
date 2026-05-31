@@ -145,13 +145,23 @@ const doc = new Document({
       bullet("The full 50/200/1000-user workload is then modelled from those real numbers plus documented AWS service limits, with estimates clearly labelled."),
 
       H2("5.2 Measured results"),
-      P("Single-request latency (EC2 t3.small, warm): six sequential requests averaged 16.9 s (min 14.7 s, max 18.4 s); Lambda was comparable (~13–15 s warm, ~17.8 s cold). Latency is dominated by the three sequential Bedrock calls, so it is similar for both architectures. Raw infrastructure concurrency on /health:"),
-      table([1560, 1560, 1560, 1560, 1560, 1560], [
-        ["Concurrency", "Throughput", "p50", "p95", "p99", "Errors"],
-        ["50", "252 req/s", "76 ms", "733 ms", "1153 ms", "0.07%"],
-        ["200", "90 req/s", "1673 ms", "5879 ms", "6547 ms", "0.55%"],
+      P("Single-request latency (EC2 t3.small, warm): six sequential requests averaged 16.9 s (min 14.7 s, max 18.4 s); Lambda was comparable (~13–15 s warm, ~17.8 s cold). Latency is dominated by the three sequential Bedrock calls, so it is similar for both architectures."),
+      P("To locate the instance’s breaking point, the cost-free /health endpoint was swept across rising concurrency:"),
+      table([2340, 2340, 2340, 2340], [
+        ["Concurrent connections", "Throughput (req/s)", "p50 latency", "p95 latency"],
+        ["25", "322  (peak)", "56 ms", "230 ms"],
+        ["50", "187", "223 ms", "730 ms"],
+        ["100", "115", "627 ms", "2.6 s"],
+        ["150", "97", "1.1 s", "5.0 s"],
+        ["200", "88", "2.2 s", "7.0 s"],
+        ["300", "78", "5.2 s", "14.7 s"],
+        ["400", "90", "6.9 s", "15.0 s"],
       ]),
-      P("Key finding: from 50 to 200 concurrent connections the single instance’s throughput fell (252 → 90 req/s) while latency rose roughly 20×. The t3.small is already saturating at 200 concurrent connections even on a trivial endpoint — direct evidence of EC2’s single-instance scaling limit.", { bold: true }),
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 120 }, children: [
+        new ImageRun({ type: "png", data: fs.readFileSync(__dirname + "/loadchart.png"),
+          transformation: { width: 540, height: 300 },
+          altText: { title: "Saturation curve", description: "EC2 t3.small throughput and latency vs concurrency", name: "loadchart" } }) ] }),
+      P("Key finding: throughput peaks at ~25 concurrent connections (322 req/s) and then collapses, while latency climbs steadily. The spike is sharpest between 150 and 200 concurrent connections (p95 crosses 5 s); by 300+ the instance is effectively broken, with p95 ≈ 15 s even on a trivial endpoint. The single t3.small’s usable ceiling is therefore ~50 concurrent connections, with breakdown at ~150–200 — direct, measured evidence of EC2’s single-instance scaling limit. (Run-to-run variance is normal for these network-bound tests; an earlier isolated run measured 252 req/s at concurrency 50.)", { bold: true }),
 
       H2("5.3 Modelled behaviour at 50 / 200 / 1000 users"),
       P("Assuming ~17 s per request and a new request roughly every 20 s per user, demand ≈ users / 20 req/s. One t3.small serves the async workload at ~40 in-flight requests, a ceiling of ≈ 2.4 req/s."),

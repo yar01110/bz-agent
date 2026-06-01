@@ -79,6 +79,36 @@ both — the compute choice is a rounding error on the bill. Lambda wins on
 EC2 only competes if a single instance is kept near 100% utilised around the
 clock, and it needs an Auto Scaling Group + load balancer to survive 200+ users.
 
+## G. Elasticity experiment — single instance vs ALB + Auto Scaling Group
+Same `/health` concurrency sweep, single t3.small vs an ALB + ASG (2 instances, 2 AZs):
+
+| Concurrency | Single (req/s) | Fleet (req/s) | Single p50 | Fleet p50 |
+|---|---|---|---|---|
+| 50  | 187 | 248 | 223 ms  | 99 ms   |
+| 100 | 115 | 142 | 627 ms  | 469 ms  |
+| 200 | 88  | 125 | 2213 ms | 1088 ms |
+| 300 | 78  | 133 | 5172 ms | 2188 ms |
+
+**Finding:** horizontal scaling raised throughput and lowered latency, and the
+gain grew with load — at 300 concurrency the fleet gave ~70% more throughput and
+~half the median latency, 0% errors. Capacity follows demand (true elasticity).
+See `report/elastic_chart.png`.
+
+## H. Failure-recovery experiment — self-healing
+Polled the ALB `/health` continuously while abruptly terminating one of the two
+fleet instances:
+
+| Metric | Result |
+|---|---|
+| Instance terminated | removed from rotation in ~6 s |
+| Client-visible outage | **NONE** — 0 / 454 health checks failed (0.00%) |
+| Self-heal recovery | **~117 s** — ASG launched + registered a replacement |
+| Single-instance equivalent | 100% outage until manual redeploy |
+
+**Finding:** one instance dying caused zero downtime (ALB routed to the survivor)
+and the ASG auto-replaced it (“cattle, not pets”). The single-instance design
+would have been a total outage; Lambda is inherently resilient the same way.
+
 ## Overall recommendation
 For an interactive, bursty planner, **Lambda + API Gateway** is the better
 default: it scales automatically, has no single point of failure, and costs

@@ -109,6 +109,8 @@ const doc = new Document({
         ["Amazon API Gateway", "Public HTTP front door (POST /plan-itinerary) that proxies to the Lambda."],
         ["Amazon ECR", "Container registry holding the two image tags (server, lambda) pulled by EC2 and Lambda."],
         ["AWS IAM", "Least-privilege roles for the Lambda and EC2 instance, granting only Bedrock + DynamoDB access."],
+        ["Elastic Load Balancing", "Application Load Balancer distributing traffic across the fleet (elasticity experiment)."],
+        ["EC2 Auto Scaling", "Auto Scaling Group that scales instance count and self-heals failed instances."],
       ]),
 
       // ---- 4. Agentic pipeline ----
@@ -199,6 +201,32 @@ const doc = new Document({
       ]),
       P("Billing conclusion: the LLM (Bedrock) is ~95%+ of the cost and is identical for both architectures — the compute choice is a rounding error on the total bill. Lambda wins on variable, spiky, or low-to-medium load (zero idle cost, no capacity planning); EC2 only competes when a single instance is kept near 100% utilised around the clock, and it requires an Auto Scaling Group plus a load balancer to survive 200+ concurrent users.", { bold: true }),
 
+      H2("5.8 Elasticity experiment — horizontal scaling"),
+      P("The single t3.small is a “pet” (the course’s term for a non-scalable, hand-tended server). To demonstrate elasticity, the EC2 workload was placed behind an Application Load Balancer and an Auto Scaling Group (desired 2 instances, across two Availability Zones) — turning it into “cattle”. The concurrency sweep was then re-run against the load balancer and compared to the single-instance baseline."),
+      table([1760, 1900, 1900, 1900, 1900], [
+        ["Concurrency", "Single (req/s)", "Fleet (req/s)", "Single p50", "Fleet p50"],
+        ["50", "187", "248", "223 ms", "99 ms"],
+        ["100", "115", "142", "627 ms", "469 ms"],
+        ["200", "88", "125", "2213 ms", "1088 ms"],
+        ["300", "78", "133", "5172 ms", "2188 ms"],
+      ]),
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 120 }, children: [
+        new ImageRun({ type: "png", data: fs.readFileSync(__dirname + "/elastic_chart.png"),
+          transformation: { width: 600, height: 230 },
+          altText: { title: "Elasticity", description: "Single vs fleet throughput and latency", name: "elastic" } }) ] }),
+      P("Finding: horizontal scaling raised both throughput and responsiveness, and the benefit grew with load — exactly when it is needed. At 300 concurrent connections the fleet delivered ~70% more throughput and roughly half the median latency, with 0% errors throughout. This is the elasticity the cloud is meant to provide: capacity follows demand instead of being fixed.", { bold: true }),
+
+      H2("5.9 Failure-recovery experiment — reliability"),
+      P("To test resilience, the load balancer’s health endpoint was polled continuously while one of the two fleet instances was abruptly terminated; the Auto Scaling Group’s self-healing was then measured."),
+      table([4680, 4680], [
+        ["Metric", "Result"],
+        ["Instance terminated", "Removed from rotation in ~6 s"],
+        ["Client-visible outage", "NONE — 0 of 454 health checks failed (0.00%)"],
+        ["Self-heal recovery", "~117 s — the ASG launched and registered a replacement"],
+        ["Single-instance equivalent", "100% outage until a manual redeploy"],
+      ]),
+      P("Finding: killing one instance caused zero client-visible downtime — the load balancer instantly routed traffic to the surviving instance — and the Auto Scaling Group automatically replaced the dead instance within ~2 minutes (desired-state reconciliation). This is the “cattle, not pets” model in action: in the single-instance design the same failure would be a total outage requiring manual intervention, whereas the elastic fleet absorbed it transparently and recovered on its own. Lambda is inherently resilient in the same way (each request runs in an isolated, automatically-managed environment).", { bold: true }),
+
       // ---- 6. Pricing ----
       H1("6. Cloud Pricing Analysis"),
       P("AWS follows a pay-per-use philosophy: you pay for what you consume, with no upfront cost. BZ-Agent illustrates three different billing models in one system."),
@@ -251,6 +279,7 @@ const doc = new Document({
         ["EC2 (Architecture B, in custom VPC)", "Live, browser UI + POST API, HTTP 200, ~13 s warm"],
         ["Lambda via API Gateway (Architecture A)", "Live public POST endpoint, HTTP 200"],
         ["SSE progress streaming", "Live: emits 3 progress events, then the itinerary"],
+        ["Elastic fleet (ALB + ASG)", "2 healthy targets; +70% throughput at 300 conc.; self-healed in ~117 s"],
         ["DynamoDB state", "Scratchpad written per node (retriever/reasoner/generator)"],
         ["Bedrock Claude Sonnet 4.5", "Reasoning + generation verified live"],
       ]),
@@ -273,6 +302,7 @@ const doc = new Document({
       // ---- 11. Future work ----
       H1("11. Future Work"),
       bullet("Live SASA bus / GTFS schedules so the Reasoner can suggest exact departures. (Not in the ODH public flat API; would require integrating SASA’s separate GTFS feed.)"),
+      bullet("Add a target-tracking auto-scaling policy so the fleet scales the instance count automatically on CPU/request metrics (the experiment used a fixed desired capacity of 2)."),
       bullet("Place the Lambda inside private subnets. Designed but deferred on cost grounds: reaching the public Open Data Hub from a private subnet needs a NAT Gateway (~$38/month) plus a Bedrock interface endpoint (~$8/month); not justified for a demo. Documented as a deliberate cost-aware decision."),
       bullet("Multi-turn memory so follow-up questions reuse prior session context (history is already persisted in DynamoDB)."),
 

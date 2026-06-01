@@ -3,7 +3,10 @@ const {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun,
   Header, Footer, AlignmentType, LevelFormat, HeadingLevel, BorderStyle,
   WidthType, ShadingType, PageNumber, PageBreak, TableOfContents, VerticalAlign,
+  ExternalHyperlink,
 } = require("docx");
+
+const REPO_URL = "https://github.com/yar01110/bz-agent";
 
 const CW = 9360; // content width (US Letter, 1" margins)
 const BLUE = "2563EB", NAVY = "0F172A", SLATE = "475569", HEADERFILL = "D5E8F0";
@@ -67,7 +70,15 @@ const doc = new Document({
         children: [new TextRun({ text: "A Cloud-Native, Multi-Agent AI System for Bolzano", size: 24, color: SLATE, italics: true })] }),
       new Paragraph({ spacing: { before: 600 }, alignment: AlignmentType.CENTER,
         children: [new TextRun({ text: "Project Report & Technical Roadmap", size: 26, bold: true })] }),
-      new Paragraph({ spacing: { before: 1400 }, alignment: AlignmentType.CENTER,
+      new Paragraph({ spacing: { before: 360 }, alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: "Nidhal Karchoud  ·  Abdellah Derf", size: 24, bold: true, color: NAVY })] }),
+      new Paragraph({ spacing: { before: 200 }, alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({ text: "Code repository: ", size: 18, color: SLATE }),
+          new ExternalHyperlink({ link: REPO_URL,
+            children: [new TextRun({ text: REPO_URL, size: 18, style: "Hyperlink" })] }),
+        ] }),
+      new Paragraph({ spacing: { before: 1000 }, alignment: AlignmentType.CENTER,
         children: [new TextRun({ text: "Architecture: AWS (eu-central-1) · Amazon Bedrock · Lambda · EC2 · DynamoDB · API Gateway", size: 18, color: SLATE })] }),
       new Paragraph({ alignment: AlignmentType.CENTER,
         children: [new TextRun({ text: "Framework: LangChain / LangGraph · Data: NOI Techpark Open Data Hub", size: 18, color: SLATE })] }),
@@ -308,6 +319,11 @@ const doc = new Document({
 
       // ---- Appendix ----
       H1("Appendix A. Project Structure & Endpoints"),
+      new Paragraph({ spacing: { after: 120 }, children: [
+        new TextRun({ text: "Full source code: ", bold: true }),
+        new ExternalHyperlink({ link: REPO_URL,
+          children: [new TextRun({ text: REPO_URL, style: "Hyperlink" })] }),
+      ] }),
       P("Repository layout: shared/ (config, LLM factory, DynamoDB, JSON utils), odh/ (Open Data Hub clients + sanitisation + weather), agents/ (Retriever, Reasoner, Generator, LangGraph), api/ (Lambda handler, FastAPI server, web UI), scripts/ (setup and deploy automation)."),
       P("Region: eu-central-1 (Frankfurt). Model: Claude Sonnet 4.5 via Bedrock inference profile eu.anthropic.claude-sonnet-4-5-20250929-v1:0. DynamoDB table: bz-agent-state."),
     ],

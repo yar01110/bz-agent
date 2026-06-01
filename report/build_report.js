@@ -222,6 +222,10 @@ const doc = new Document({
       bullet("Key rotation awareness: an access key accidentally exposed during setup was identified as a rotation risk (documented as a lesson in secure credential handling)."),
       H2("7.1 Network isolation — custom VPC"),
       P("The EC2 workload runs inside a purpose-built Virtual Private Cloud rather than the default VPC, demonstrating network-level control:"),
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 120 }, children: [
+        new ImageRun({ type: "png", data: fs.readFileSync(__dirname + "/vpc_diagram.png"),
+          transformation: { width: 560, height: 396 },
+          altText: { title: "VPC", description: "BZ-Agent custom VPC", name: "vpc" } }) ] }),
       bullet("VPC 10.0.0.0/16 with DNS support and hostnames enabled."),
       bullet("A public subnet (10.0.1.0/24) with an Internet Gateway and a 0.0.0.0/0 route, so the instance can reach the Open Data Hub and Bedrock."),
       bullet("A DynamoDB gateway VPC endpoint attached to the route table, so state traffic to DynamoDB stays on the AWS private network instead of the public internet (and incurs no extra cost)."),

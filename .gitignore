@@ -15,3 +15,6 @@ venv/
 Thumbs.db
 
 report/node_modules/
+
+# Office temp lock files
+~$*
